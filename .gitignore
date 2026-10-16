@@ -1,2 +1,12 @@
 venv/
+.venv/
 __pycache__/
+.pytest_cache/
+*.py[cod]
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+!output/
+!output/*.png
+!output/*.csv
