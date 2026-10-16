@@ -1,4 +1,0 @@
-Design_Tier,Topology,Height_mm,TopChord_mm,Volume_cm3,Mass_kg,Reduction_Pct,Peak_Stress_MPa,SLS_Defl_mm,Freq_Hz,Embodied_CO2_kg
-0_Baseline_UWE,Fan_3Vert,1000,1550,50215.4,394.19,0.0,54.64,0.043,157.5,540.0
-1_Tier1_CV_14Pct,Fan_3Vert,1000,1440,40413.9,317.25,19.52,54.64,0.043,172.2,434.6
-2_Tier2_Full_Parametric,Pure_Warren,600,1560,28054.7,220.23,44.13,78.1,0.172,99.3,301.7
