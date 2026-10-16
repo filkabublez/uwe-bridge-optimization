@@ -9,6 +9,7 @@ from sections import load_section_catalog
 from geometry import build_footbridge_geometry
 from loads import assemble_load_vector
 from solver import solve_3d_frame
+from dynamics import run_span_frequency_sweep
 
 def test_symmetric_two_bar_frame_benchmark():
     """1. Verifies 3D solver axial force against exact hand calculation for a 2-bar V-truss."""
@@ -69,3 +70,13 @@ def test_parapet_height_constraint_enforced():
         cfg = json.load(f)
     with pytest.raises(ValueError):
         build_footbridge_geometry(height_m=0.60, section_map=cfg["baseline_sections"])
+
+def test_span_frequency_sweep_preserves_brace_angle_limit():
+    with open("config.json") as f:
+        cfg = json.load(f)
+    catalog = load_section_catalog()
+    result = run_span_frequency_sweep(
+        catalog, cfg, cfg["baseline_sections"], spans_m=[24.0]
+    )
+    assert len(result) == 1
+    assert result[0]["f1_vertical_hz"] > 0.0

@@ -73,10 +73,29 @@ def run_span_frequency_sweep(catalog, config, section_map, spans_m=None):
         spans_m = np.linspace(3.0, 24.0, 15)
     sweep_results = []
     for L in spans_m:
-        cfg = {**config, "geometry": {**config["geometry"], "span_m": float(L), "top_chord_length_m": float(0.517 * L)}}
+        span = float(L)
+        top_chord_length = 0.517 * span
+        x_sh = (span - top_chord_length) / 2.0
+        x_mid = span / 2.0
+        brace_run = max(x_sh, x_mid - x_sh)
+        min_height = (
+            np.tan(np.deg2rad(config["geometry"]["min_brace_angle_deg"]))
+            * brace_run
+            * (1.0 + 1e-9)
+        )
+        height = max(config["geometry"]["height_m"], min_height)
+        cfg = {
+            **config,
+            "geometry": {
+                **config["geometry"],
+                "span_m": span,
+                "top_chord_length_m": top_chord_length,
+                "height_m": height
+            }
+        }
         nodes, members = build_footbridge_geometry(
-            span_m=float(L), width_cc_m=cfg["geometry"]["width_cc_m"],
-            height_m=cfg["geometry"]["height_m"], top_chord_length_m=float(0.517 * L),
+            span_m=span, width_cc_m=cfg["geometry"]["width_cc_m"],
+            height_m=height, top_chord_length_m=top_chord_length,
             section_map=section_map
         )
         F_sls = assemble_load_vector(nodes, members, catalog, cfg, "SLS_Char")
