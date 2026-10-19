@@ -39,6 +39,10 @@ def main():
         opt_sizing_eval["section_map"], catalog, config,
         include_mid_vertical=False, include_plan_bracing=False
     )
+    opt_rational_dyn = compute_modal_frequencies(
+        opt_rational_eval["nodes"], opt_rational_eval["members"], catalog, config,
+        opt_rational_eval["sol_uls"]["K"], opt_rational_eval["sol_uls"]["free_dofs"]
+    )
 
     mass_base = base_eval["carbon"]["steel_mass_kg"]
     mass_sized = opt_sizing_eval["carbon"]["steel_mass_kg"]
@@ -62,13 +66,15 @@ def main():
     print(f"{'Max EC3 Member Utilisation Ratio':<36} | {base_eval['max_member_ur']*100:<17.1f}% | {opt_sizing_eval['max_member_ur']*100:<17.1f}% | {opt_rational_eval['max_member_ur']*100:<17.1f}%")
     print(f"{'Max EN 1993-1-8 K-Joint Utilisation':<36} | {base_eval['max_joint_ur']*100:<17.1f}% | {opt_sizing_eval['max_joint_ur']*100:<17.1f}% | {opt_rational_eval['max_joint_ur']*100:<17.1f}%")
     print(f"{'SLS Deflection (mm) [Limit 10.0 mm]':<36} | {base_eval['sls_defl_mm']:<18.3f} | {opt_sizing_eval['sls_defl_mm']:<18.3f} | {opt_rational_eval['sls_defl_mm']:<18.3f}")
-    print(f"{'1st Vertical Natural Freq f1 (Hz)':<36} | {base_dyn['f1_vertical_hz']:<18.1f} | {opt_sizing_dyn['f1_vertical_hz']:<18.1f} | {opt_sizing_dyn['f1_vertical_hz']:<18.1f}")
+    print(f"{'1st Vertical Natural Freq f1 (Hz)':<36} | {base_dyn['f1_vertical_hz']:<18.1f} | {opt_sizing_dyn['f1_vertical_hz']:<18.1f} | {opt_rational_dyn['f1_vertical_hz']:<18.1f}")
     print("="*96 + "\n")
 
     # Export Member Schedule CSV (Fixes C6)
     csv_path = os.path.join("output", "member_schedule.csv")
     with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(opt_sizing_eval["schedule"][0].keys()))
+        writer = csv.DictWriter(
+            f, fieldnames=list(opt_sizing_eval["schedule"][0].keys()), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(opt_sizing_eval["schedule"])
 
@@ -144,6 +150,47 @@ def main():
     plt.tight_layout()
     plt.savefig(os.path.join("output", "engineering_verification_plots.png"))
     plt.close(fig)
+
+    validation_rows = [
+        {
+            "parameter": "max_member_ur",
+            "baseline": f"{base_eval['max_member_ur'] * 100:.1f}%",
+            "full_braced": f"{opt_sizing_eval['max_member_ur'] * 100:.1f}%",
+            "rationalized": f"{opt_rational_eval['max_member_ur'] * 100:.1f}%"
+        },
+        {
+            "parameter": "max_joint_ur",
+            "baseline": f"{base_eval['max_joint_ur'] * 100:.1f}%",
+            "full_braced": f"{opt_sizing_eval['max_joint_ur'] * 100:.1f}%",
+            "rationalized": f"{opt_rational_eval['max_joint_ur'] * 100:.1f}%"
+        },
+        {
+            "parameter": "sls_defl_mm",
+            "baseline": f"{base_eval['sls_defl_mm']:.2f}",
+            "full_braced": f"{opt_sizing_eval['sls_defl_mm']:.2f}",
+            "rationalized": f"{opt_rational_eval['sls_defl_mm']:.2f}"
+        },
+        {
+            "parameter": "f1_vertical_hz",
+            "baseline": f"{base_dyn['f1_vertical_hz']:.2f}",
+            "full_braced": f"{opt_sizing_dyn['f1_vertical_hz']:.2f}",
+            "rationalized": f"{opt_rational_dyn['f1_vertical_hz']:.2f}"
+        },
+    ]
+    with open(os.path.join("output", "validation_table.md"), "w") as f:
+        f.write("| Parameter | Baseline | Full Braced | Rationalized |\n")
+        f.write("|---|---:|---:|---:|\n")
+        for row in validation_rows:
+            f.write(f"| {row['parameter']} | {row['baseline']} | {row['full_braced']} | {row['rationalized']} |\n")
+
+    with open(os.path.join("output", "results_summary.md"), "w") as f:
+        f.write("# UWE Footbridge Design Summary\n\n")
+        f.write(f"- Baseline steel mass: {mass_base:.1f} kg\n")
+        f.write(f"- Full-braced steel mass: {mass_sized:.1f} kg\n")
+        f.write(f"- Rationalized steel mass: {mass_rat:.1f} kg\n")
+        f.write(f"- Baseline max member utilization: {base_eval['max_member_ur'] * 100:.1f}%\n")
+        f.write(f"- Full-braced max member utilization: {opt_sizing_eval['max_member_ur'] * 100:.1f}%\n")
+        f.write(f"- Rationalized max member utilization: {opt_rational_eval['max_member_ur'] * 100:.1f}%\n")
 
 if __name__ == "__main__":
     main()

@@ -29,11 +29,15 @@ def compute_modal_frequencies(nodes, members, catalog, config, K, free_dofs):
             M_diag[6*n_id + 4] += rot_inertia
             M_diag[6*n_id + 5] += rot_inertia
 
-    # 2. FRP Decking mass + 10% pedestrian mass participation on bottom chord nodes
+    # 2. FRP deck + 10% pedestrian crowd mass participation on the bottom-chord nodes.
     span = config["geometry"]["span_m"]
     b_deck = config["geometry"]["clear_deck_width_m"]
-    deck_mass_total = config["loads"]["frp_deck_mass_kg_m2"] * span * b_deck
-    mass_per_bot_node = deck_mass_total / 10.0
+    load_cfg = config.get("loads", {})
+    deck_mass_kg_m2 = float(load_cfg.get("frp_deck_mass_kg_m2", 19.5))
+    crowd_mass_kg_m2 = 50.0
+    deck_mass_total = deck_mass_kg_m2 * span * b_deck
+    crowd_mass_total = crowd_mass_kg_m2 * span * b_deck * 0.10
+    mass_per_bot_node = (deck_mass_total + crowd_mass_total) / 10.0
     for n_id in range(10):
         for j in range(3):
             M_diag[6*n_id + j] += mass_per_bot_node

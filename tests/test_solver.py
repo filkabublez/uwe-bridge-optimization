@@ -8,7 +8,7 @@ import pytest
 from sections import load_section_catalog
 from geometry import build_footbridge_geometry
 from loads import assemble_load_vector
-from solver import solve_3d_frame
+from solver import solve_3d_frame, solve_linear_buckling
 from dynamics import run_span_frequency_sweep
 
 def test_symmetric_two_bar_frame_benchmark():
@@ -63,6 +63,25 @@ def test_mechanism_detection_raises_error():
     F = np.zeros(12)
     with pytest.raises(RuntimeError):
         solve_3d_frame(nodes, members, catalog, F, support_dofs=[0, 1, 2])  # Free to rotate -> mechanism!
+
+
+def test_linear_buckling_matches_cantilever_euler_load():
+    """Checks the geometric-stiffness buckling estimate against Euler's cantilever result."""
+    nodes = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+    catalog = load_section_catalog()
+    members = [{
+        "id": 1, "n1": 0, "n2": 1, "group": "Column",
+        "section": "SHS 100x100x4.0", "length_m": 1.0
+    }]
+    F = np.zeros(12)
+    F[8] = -1.0
+    solution = solve_linear_buckling(
+        nodes, members, catalog, F, support_dofs=list(range(6))
+    )
+    section = catalog["SHS 100x100x4.0"]
+    expected = np.pi**2 * 210e9 * min(section["Iy"], section["Iz"]) / 4.0
+    assert np.isclose(solution["alpha_cr"], expected, rtol=0.03)
+
 
 def test_parapet_height_constraint_enforced():
     """5. Verifies geometry generator rejects truss heights below 1.0m handrail limit."""

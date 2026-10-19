@@ -104,8 +104,6 @@ def solve_3d_frame(nodes, members, catalog, F, E=210e9, G=80.77e9, support_dofs=
     for m, L, T, k_loc, dofs, sec in elem_cache:
         u_glob = u[dofs]
         f_loc = k_loc @ (T @ u_glob)
-        # f_loc = [Fx1, Fy1, Fz1, Mx1, My1, Mz1, Fx2, Fy2, Fz2, Mx2, My2, Mz2]
-        # Tension positive: N = f_loc[6] (or -f_loc[0])
         N_axial = float(f_loc[6])
         Vy_max = float(max(abs(f_loc[1]), abs(f_loc[7])))
         Vz_max = float(max(abs(f_loc[2]), abs(f_loc[8])))
@@ -135,4 +133,65 @@ def solve_3d_frame(nodes, members, catalog, F, E=210e9, G=80.77e9, support_dofs=
         "condition_number": cond_num,
         "member_forces": member_forces,
         "max_vertical_defl_mm": float(np.max(np.abs(u[2::6])) * 1000.0)
+    }
+
+
+def _assemble_geometric_stiffness(nodes, members, catalog, member_forces):
+    """Assemble beam-column geometric stiffness from the solved member compression forces."""
+    n_nodes = len(nodes)
+    ndof = 6 * n_nodes
+    Kg = np.zeros((ndof, ndof), dtype=float)
+    for m, force in zip(members, member_forces):
+        compression = max(0.0, -force["N_Ed_N"])
+        if compression == 0.0:
+            continue
+        p1, p2 = nodes[m["n1"]], nodes[m["n2"]]
+        L, _, T = _element_rotation_matrix_3d(p1, p2)
+        k_geo = np.zeros((12, 12), dtype=float)
+        beam_geo = (compression / (30.0 * L)) * np.array([
+            [36.0, 3.0 * L, -36.0, 3.0 * L],
+            [3.0 * L, 4.0 * L**2, -3.0 * L, -L**2],
+            [-36.0, -3.0 * L, 36.0, -3.0 * L],
+            [3.0 * L, -L**2, -3.0 * L, 4.0 * L**2]
+        ])
+        # Local-y bending uses (v, rz); local-z uses (w, -ry) by the frame sign convention.
+        y_dofs = [1, 5, 7, 11]
+        z_dofs = [2, 4, 8, 10]
+        signs = np.diag([1.0, -1.0, 1.0, -1.0])
+        k_geo[np.ix_(y_dofs, y_dofs)] = beam_geo
+        k_geo[np.ix_(z_dofs, z_dofs)] = signs @ beam_geo @ signs
+        dofs = [6 * m["n1"] + j for j in range(6)] + [6 * m["n2"] + j for j in range(6)]
+        Kg[np.ix_(dofs, dofs)] += T.T @ k_geo @ T
+    return Kg
+
+
+def solve_linear_buckling(nodes, members, catalog, F=None, E=210e9, G=80.77e9, support_dofs=None):
+    """Solve the linear buckling eigenproblem for the applied load pattern."""
+    if F is None:
+        F = np.zeros(6 * len(nodes), dtype=float)
+    sol = solve_3d_frame(nodes, members, catalog, F, E=E, G=G, support_dofs=support_dofs)
+    K = sol["K"]
+    Kg = _assemble_geometric_stiffness(nodes, members, catalog, sol["member_forces"])
+    free_dofs = sol["free_dofs"]
+    K_ff = K[np.ix_(free_dofs, free_dofs)]
+    Kg_ff = Kg[np.ix_(free_dofs, free_dofs)]
+    if np.linalg.norm(Kg_ff) < 1e-12:
+        return {"alpha_cr": np.inf, "K": K, "Kg": Kg, "free_dofs": free_dofs,
+                "mode_shape": np.zeros_like(F), "eigenvalue": 0.0}
+    eigvals, eigvecs = np.linalg.eig(np.linalg.solve(K_ff, Kg_ff))
+    positive = np.flatnonzero(np.real(eigvals) > 1e-12)
+    if positive.size == 0:
+        return {"alpha_cr": np.inf, "K": K, "Kg": Kg, "free_dofs": free_dofs,
+                "mode_shape": np.zeros_like(F), "eigenvalue": 0.0}
+    mode_index = positive[np.argmax(np.real(eigvals[positive]))]
+    eigenvalue = float(np.real(eigvals[mode_index]))
+    mode_shape = np.zeros_like(F)
+    mode_shape[free_dofs] = np.real(eigvecs[:, mode_index])
+    return {
+        "alpha_cr": 1.0 / eigenvalue,
+        "K": K,
+        "Kg": Kg,
+        "free_dofs": free_dofs,
+        "mode_shape": mode_shape,
+        "eigenvalue": eigenvalue
     }

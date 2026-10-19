@@ -8,7 +8,7 @@ Chapter 7 (Table 7.2):
 """
 import numpy as np
 
-def check_shs_k_joint(chord_sec, brace_sec, N_brace_Ed_N, theta_deg=54.0, fy0=355e6, gamma_M5=1.0):
+def check_shs_k_joint(chord_sec, brace_sec, N_brace_Ed_N, theta_deg=54.0, fy0=355e6, gamma_M5=1.25):
     b0, t0 = chord_sec["b"], chord_sec["t"]
     b1 = brace_sec["b"]
     beta = b1 / b0

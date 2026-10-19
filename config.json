@@ -16,15 +16,24 @@
     "fy_Pa": 355000000.0,
     "density_kg_m3": 7850.0,
     "gamma_M0": 1.0,
-    "gamma_M1": 1.0,
-    "gamma_M5_joints": 1.0,
+    "gamma_M1": 1.1,
+    "gamma_M5_joints": 1.25,
     "min_galvanizing_t_mm": 3.2
   },
   "loads": {
+    "pedestrian_udl_kPa": 5.0,
     "pedestrian_live_kPa": 5.0,
+    "concentrated_load_Qfwk_kN": 10.0,
+    "parapet_horizontal_kN_m": 0.8,
+    "wind_pressure_kPa": 0.65,
+    "wind_force_coeff_Cf": 1.6,
     "frp_deck_mass_kg_m2": 19.5,
     "gamma_G_uls": 1.35,
-    "gamma_Q_uls": 1.50
+    "gamma_Q_uls": 1.35,
+    "gamma_Q_traffic_uls": 1.35,
+    "gamma_Q_wind_uls": 1.50,
+    "psi_0_wind": 0.3,
+    "project_sls_defl_ratio": 300.0
   },
   "baseline_sections": {
     "Top_Chord": "SHS 100x100x4.0",
