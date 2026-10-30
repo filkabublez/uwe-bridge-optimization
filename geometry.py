@@ -15,7 +15,6 @@ def build_footbridge_geometry(span_m=3.0, width_cc_m=1.4, height_m=1.0,
     x_mid = span_m / 2.0
     x_rt = span_m - x_sh
 
-    # Check brace-to-chord angle >= 30 deg per BS EN 1993-1-8 Cl. 7.1.2
     raker_angle_deg = np.degrees(np.arctan2(height_m, x_sh))
     diag_angle_deg = np.degrees(np.arctan2(height_m, x_mid - x_sh))
     if min(raker_angle_deg, diag_angle_deg) < 30.0:
@@ -46,17 +45,15 @@ def build_footbridge_geometry(span_m=3.0, width_cc_m=1.4, height_m=1.0,
         members.append({"n1": b_off+0, "n2": t_off+0, "group": "End_Raker", "section": section_map["End_Raker"]})
         members.append({"n1": b_off+4, "n2": t_off+2, "group": "End_Raker", "section": section_map["End_Raker"]})
 
-        # Outer vertical posts (form U-frames with transoms at x_sh and x_rt)
         members.append({"n1": b_off+1, "n2": t_off+0, "group": "Web_Vertical", "section": section_map["Web_Vertical"]})
         if include_mid_vertical:
             members.append({"n1": b_off+2, "n2": t_off+1, "group": "Web_Vertical", "section": section_map["Web_Vertical"]})
         members.append({"n1": b_off+3, "n2": t_off+2, "group": "Web_Vertical", "section": section_map["Web_Vertical"]})
 
-        # Fan diagonals converging at mid-span bottom node
         members.append({"n1": t_off+0, "n2": b_off+2, "group": "Web_Diagonal", "section": section_map["Web_Diagonal"]})
         members.append({"n1": t_off+2, "n2": b_off+2, "group": "Web_Diagonal", "section": section_map["Web_Diagonal"]})
 
-    # 4 Transverse Floor Transoms (at x=0, x_sh, x_rt, span_m; plus mid-span node 2-7)
+    # Transverse Floor Transoms (at x=0, x_sh, x_mid, x_rt, span_m)
     for nL, nR in [(0, 5), (1, 6), (2, 7), (3, 8), (4, 9)]:
         members.append({"n1": nL, "n2": nR, "group": "Transom", "section": section_map["Transom"]})
 

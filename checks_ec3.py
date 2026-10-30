@@ -7,14 +7,18 @@ BS EN 1993-1-1:2005 Member Resistance Checks for Hot-Finished S355J2H Hollow Sec
   - Bending Resistance (Cl. 6.2.5): Mc,Rd = Wpl * fy / gamma_M0 (Class 1/2)
   - Shear Resistance (Cl. 6.2.6): Vpl,Rd = Av * (fy / sqrt(3)) / gamma_M0
   - Flexural Buckling (Cl. 6.3.1 & Table 6.2): Curve 'a' (alpha = 0.21) for EN 10210 hot-finished SHS/RHS
-  - System Buckling Lengths (Annex BB.1.3): 0.90*L for chords, 0.75*L for web braces
-  - Combined Bending & Axial Compression (Cl. 6.2.9 / Cl. 6.3.3)
+  - System Buckling Lengths:
+      * 0.90*L for chords/rakers in-plane and 0.75*L for web braces (BS EN 1993-1-1 Annex BB.1.3)
+      * 0.95*L assumed for half-through top chord stabilized by U-frame action (backed by alpha_cr)
+  - Combined Bending & Axial Check: Simplified conservative linear interaction
+    (|N_Ed|/N_Rd + My_Ed/My,Rd + Mz_Ed/Mz,Rd <= 1.0)
 """
 import numpy as np
 
+
 def classify_shs_section(sec, fy=355e6):
     """Classifies compression flange/web slenderness c/t per BS EN 1993-1-1 Table 5.2."""
-    epsilon = np.sqrt(235e6 / fy)  # 0.814 for S355
+    epsilon = np.sqrt(235e6 / fy)
     c_mm = max(sec["h_mm"], sec["b_mm"]) - 3.0 * sec["t_mm"]
     c_over_t = c_mm / sec["t_mm"]
     if c_over_t <= 33.0 * epsilon:
@@ -24,6 +28,7 @@ def classify_shs_section(sec, fy=355e6):
     elif c_over_t <= 42.0 * epsilon:
         return 3, c_over_t
     return 4, c_over_t
+
 
 def check_member_ec3(mf, sec, config):
     E = config["materials"]["E_Pa"]
@@ -51,16 +56,16 @@ def check_member_ec3(mf, sec, config):
     ur_axial = abs(N_Ed) / N_Rd
     ur_bending = (My_Ed / My_Rd) + (Mz_Ed / Mz_Rd)
     ur_shear = V_Ed / V_Rd
+    # Simplified conservative linear interaction
     ur_cross_section = ur_axial + ur_bending
 
     # 2. Flexural Buckling Check (Cl. 6.3.1, Buckling Curve 'a' -> alpha = 0.21 for EN 10210)
-    # Effective length factors per BS EN 1993-1-1 Annex BB.1.3 & U-frame action
     if grp in ("Web_Diagonal", "Web_Vertical", "Plan_Brace"):
-        k_eff = 0.75
+        k_eff = 0.75  # BS EN 1993-1-1 Annex BB.1.3
     elif grp == "Top_Chord":
-        k_eff = 0.95  # Half-through chord stabilized by U-frame verticals/transoms
+        k_eff = 0.95  # Assumed for U-frame restrained half-through top chord
     else:
-        k_eff = 0.90
+        k_eff = 0.90  # BS EN 1993-1-1 Annex BB.1.3
 
     L_cr = k_eff * L
     I_min = min(sec["Iy"], sec["Iz"])
@@ -72,13 +77,13 @@ def check_member_ec3(mf, sec, config):
     chi = float(min(1.0, 1.0 / (phi + np.sqrt(max(1e-9, phi**2 - lambda_bar**2)))))
     Nb_Rd = (chi * sec["A"] * fy) / gamma_M1
 
-    if N_Ed < 0:  # Compression member
+    if N_Ed < 0:
         ur_buckling = (abs(N_Ed) / Nb_Rd) + (My_Ed / My_Rd) + (Mz_Ed / Mz_Rd)
     else:
         ur_buckling = 0.0
 
     checks = {
-        "Cross_Section_M_N": ur_cross_section,
+        "Simplified_Conservative_M_N": ur_cross_section,
         "Flexural_Buckling": ur_buckling,
         "Shear": ur_shear
     }
@@ -95,6 +100,7 @@ def check_member_ec3(mf, sec, config):
         "My_Rd_kNm": My_Rd / 1e3,
         "V_Ed_kN": V_Ed / 1e3,
         "sigma_total_MPa": mf["sigma_total_MPa"],
+        "sigma_plastic_MPa": mf.get("sigma_plastic_MPa", mf["sigma_total_MPa"]),
         "lambda_bar": lambda_bar,
         "chi": chi,
         "ur_gov": checks[gov_name],

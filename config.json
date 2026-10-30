@@ -7,7 +7,9 @@
     "height_m": 1.0,
     "min_parapet_height_m": 1.0,
     "top_chord_length_m": 1.55,
-    "min_brace_angle_deg": 30.0
+    "min_brace_angle_deg": 30.0,
+    "transom_tributary_spacing_m": 1.0,
+    "exposed_wind_depth_m": 0.30
   },
   "materials": {
     "steel_grade": "S355J2H (BS EN 10210-1)",
@@ -22,18 +24,23 @@
   },
   "loads": {
     "pedestrian_udl_kPa": 5.0,
-    "pedestrian_live_kPa": 5.0,
     "concentrated_load_Qfwk_kN": 10.0,
     "parapet_horizontal_kN_m": 0.8,
     "wind_pressure_kPa": 0.65,
     "wind_force_coeff_Cf": 1.6,
     "frp_deck_mass_kg_m2": 19.5,
     "gamma_G_uls": 1.35,
-    "gamma_Q_uls": 1.35,
     "gamma_Q_traffic_uls": 1.35,
     "gamma_Q_wind_uls": 1.50,
-    "psi_0_wind": 0.3,
     "project_sls_defl_ratio": 300.0
+  },
+  "sources_and_assumptions": {
+    "pedestrian_udl_kPa": "5.0 kPa from BS EN 1991-2:2003 Cl. 5.3.2.1 (Load Model 4) & UWE Report Sec 4.2",
+    "concentrated_load_Qfwk_kN": "10.0 kN service load from BS EN 1991-2:2003 Cl. 5.3.2.2",
+    "parapet_horizontal_kN_m": "0.8 kN/m horizontal pedestrian barrier load from BS EN 1991-2:2003 Cl. 4.8 (variable traffic factor gamma_Q = 1.35)",
+    "wind_pressure_kPa": "0.65 kPa peak velocity pressure q_p (assumed typical UK inland low-altitude canal site per BS EN 1991-1-4), Cf = 1.6 for open steel truss (BS EN 1991-1-4 Cl. 7.11)",
+    "frp_deck_mass_kg_m2": "19.5 kg/m^2 from FRP grating manufacturer datasheet & UWE Report Sec 4.2/4.4",
+    "gamma_factors": "gamma_G = 1.35, gamma_Q_traffic = 1.35 (matching UWE Report Sec 4.4), gamma_Q_wind = 1.50 per BS EN 1990"
   },
   "baseline_sections": {
     "Top_Chord": "SHS 100x100x4.0",

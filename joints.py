@@ -1,47 +1,89 @@
 """
 joints.py
 Welded Square Hollow Section (SHS) Nodal Joint Resistance Check per BS EN 1993-1-8:2005
-Chapter 7 (Table 7.2):
-  - Geometric validity ranges (Cl. 7.1.2): 0.35 <= beta <= 1.0, b0/t0 <= 35, theta >= 30 deg
-  - Chord Face Plastification Resistance (Table 7.2) for Gap K/N-joints
-  - Chord Face Punching Shear Resistance (Table 7.2) for beta <= 0.85
+Chapter 7 (Table 7.10 / Table 7.2):
+  - Computes true 3D brace-to-chord angle theta from nodal geometry (theta >= 30 deg).
+  - For beta <= 0.85: checks Chord Face Plastification and Chord Face Punching Shear.
+  - For beta == 1.00 (full-width matched SHS joint): checks Chord Side-Wall Bearing/Buckling
+    resistance N_1,Rd = (f_b * t_0 / sin(theta)) * (b_1 / sin(theta) + 10 * t_0) / gamma_M5.
+  - For 0.85 < beta < 1.00: linear interpolation per BS EN 1993-1-8 Table 7.10.
 """
 import numpy as np
 
-def check_shs_k_joint(chord_sec, brace_sec, N_brace_Ed_N, theta_deg=54.0, fy0=355e6, gamma_M5=1.25):
-    b0, t0 = chord_sec["b"], chord_sec["t"]
+
+def compute_angle_between_members_deg(v1, v2):
+    """Computes acute angle in degrees between two 3D member direction vectors."""
+    u1 = np.asarray(v1, dtype=float) / np.linalg.norm(v1)
+    u2 = np.asarray(v2, dtype=float) / np.linalg.norm(v2)
+    cos_theta = np.clip(abs(np.dot(u1, u2)), 0.0, 1.0)
+    return float(np.degrees(np.arccos(cos_theta)))
+
+
+def check_shs_k_joint(chord_sec, brace_sec, N_brace_Ed_N, theta_deg=None, fy0=355e6, gamma_M5=1.25, E=210e9):
+    if theta_deg is None:
+        raise ValueError("theta_deg must be computed from actual member geometry, not defaulted.")
+
+    b0, h0, t0 = chord_sec["b"], chord_sec["h"], chord_sec["t"]
     b1 = brace_sec["b"]
     beta = b1 / b0
     theta = np.radians(theta_deg)
+    sin_t = np.sin(theta)
 
-    # Geometric validity checks per BS EN 1993-1-8 Cl. 7.1.2
     b0_over_t0 = b0 / t0
-    valid_geometry = (beta >= 0.35) and (b0_over_t0 <= 35.0) and (theta_deg >= 30.0)
+    valid_geometry = (0.35 <= beta <= 1.0 + 1e-6) and (b0_over_t0 <= 35.0) and (theta_deg >= 30.0)
 
-    # 1. Chord Face Plastification Resistance N_1,Rd (BS EN 1993-1-8 Table 7.2)
     gamma_half = b0 / (2.0 * t0)
-    k_n = 1.0  # Conservative chord stress factor
-    N1_Rd_plast = (k_n * fy0 * (t0**2) / np.sin(theta)) * (
-        (2.0 * b1 / b0) + 4.0 * np.sqrt(max(0.05, 1.0 - beta))
-    ) * (gamma_half ** 0.5) / gamma_M5
+    k_n = 1.0
 
-    # 2. Chord Punching Shear Resistance (applicable when beta <= 0.85)
-    if beta <= 0.85:
-        b_ep = min(b1, (10.0 / (b0 / t0)) * b1)
-        N1_Rd_punch = (fy0 / np.sqrt(3.0)) * t0 * (
-            (2.0 * b1 / np.sin(theta)) + 2.0 * b_ep
+    # 1. Chord Face Plastification & Punching Shear (applicable for beta <= 0.85)
+    def _face_and_punching_rd(beta_val, b1_val):
+        N_plast = (k_n * fy0 * (t0**2) / sin_t) * (
+            (2.0 * b1_val / b0) + 4.0 * np.sqrt(max(1e-6, 1.0 - beta_val))
+        ) * (gamma_half ** 0.5) / gamma_M5
+        b_ep = min(b1_val, (10.0 / b0_over_t0) * b1_val)
+        N_punch = (fy0 / np.sqrt(3.0)) * t0 * (
+            (2.0 * b1_val / sin_t) + 2.0 * b_ep
         ) / gamma_M5
-        N1_Rd = min(N1_Rd_plast, N1_Rd_punch)
+        return min(N_plast, N_punch)
+
+    # 2. Chord Side-Wall Crushing / Web Buckling Resistance at beta = 1.0 (BS EN 1993-1-8 Table 7.10)
+    def _sidewall_rd(b1_val):
+        # Side-wall slenderness lambda_w = (h0 / t0 - 2) / sin(theta)
+        lambda_w = ((h0 / t0) - 2.0) / sin_t
+        lambda_1 = np.pi * np.sqrt(E / fy0)
+        lambda_bar_w = 0.546 * (lambda_w / lambda_1)
+        phi_w = 0.5 * (1.0 + 0.21 * (lambda_bar_w - 0.2) + lambda_bar_w**2)
+        chi_w = min(1.0, 1.0 / (phi_w + np.sqrt(max(1e-9, phi_w**2 - lambda_bar_w**2))))
+        f_b = chi_w * fy0 if N_brace_Ed_N < 0 else fy0
+        return (2.0 * f_b * t0 / sin_t) * ((b1_val / sin_t) + 10.0 * t0) / gamma_M5
+
+    if beta <= 0.85:
+        N1_Rd = _face_and_punching_rd(beta, b1)
+        failure_mode = "Chord_Face_Plastification_or_Punching"
+    elif beta >= 0.999:
+        N1_Rd = _sidewall_rd(b0)
+        failure_mode = "Chord_Side_Wall_Failure"
     else:
-        N1_Rd = N1_Rd_plast
+        # Linear interpolation between beta = 0.85 and beta = 1.00 per Table 7.10
+        rd_085 = _face_and_punching_rd(0.85, 0.85 * b0)
+        rd_100 = _sidewall_rd(b0)
+        w = (beta - 0.85) / 0.15
+        N1_Rd = (1.0 - w) * rd_085 + w * rd_100
+        failure_mode = "Interpolated_Face_to_SideWall"
 
     ur_joint = abs(N_brace_Ed_N) / N1_Rd if valid_geometry else 9.99
     return {
         "chord": chord_sec["name"],
         "brace": brace_sec["name"],
         "beta": round(beta, 3),
+        "theta_deg": round(theta_deg, 1),
         "valid_geometry": valid_geometry,
+        "failure_mode": failure_mode,
         "N1_Ed_kN": abs(N_brace_Ed_N) / 1e3,
         "N1_Rd_kN": N1_Rd / 1e3,
         "ur_joint": ur_joint
     }
+
+
+def check_shs_joint_en1993_1_8(chord_sec, brace_sec, N_brace_Ed_N, theta_deg, fy0=355e6, gamma_M5=1.25):
+    return check_shs_k_joint(chord_sec, brace_sec, N_brace_Ed_N, theta_deg=theta_deg, fy0=fy0, gamma_M5=gamma_M5)
