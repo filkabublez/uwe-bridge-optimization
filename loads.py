@@ -50,7 +50,7 @@ def assemble_load_vector(nodes, members, catalog, config, load_case="ULS_Full_Sp
         gamma_Q_traffic = 1.0
         gamma_Q_wind = 1.0
 
-    # 1. Structural steel member self-weight (lumped at member ends + local transom self-weight UDL)
+    # 1. Structural steel member self-weight
     for m in members:
         sec = catalog[m["section"]]
         L = m["length_m"]
@@ -62,11 +62,10 @@ def assemble_load_vector(nodes, members, catalog, config, load_case="ULS_Full_Sp
             member_udl_z[m["id"]] = w_sw_N_m
 
     # 2. Transom Load Path: FRP Deck Dead Load + Pedestrian Crowd Live Load (BS EN 1991-2 LM4)
-    # Deck spans longitudinally between transoms (Report Sec 4.4: s = 1.0 m for interior transoms)
     deck_mass_kg_m2 = _cfg_float(loads_cfg, "frp_deck_mass_kg_m2", default=19.5)
-    q_deck_N_m2 = deck_mass_kg_m2 * g  # 191.3 N/m^2
+    q_deck_N_m2 = deck_mass_kg_m2 * g
     q_live_kPa = _cfg_float(loads_cfg, "pedestrian_udl_kPa", "pedestrian_live_kPa", default=5.0)
-    q_live_N_m2 = q_live_kPa * 1e3      # 5000.0 N/m^2
+    q_live_N_m2 = q_live_kPa * 1e3
 
     include_crowd_udl = load_case in {"ULS_Full_Span", "ULS_Half_Span", "ULS_Parapet", "SLS_Char"}
 
@@ -75,7 +74,6 @@ def assemble_load_vector(nodes, members, catalog, config, load_case="ULS_Full_Sp
             continue
         x_t = nodes[m["n1"]][0]
         is_end_transom = (abs(x_t) < 1e-6) or (abs(x_t - span) < 1e-6)
-        # Interior transoms carry s = 1.0 m tributary spacing (Report Sec 4.4); end transoms carry 0.5 * s
         s_trib = 0.5 * s_transom_nom if is_end_transom else s_transom_nom
 
         if load_case == "ULS_Half_Span":
@@ -85,11 +83,9 @@ def assemble_load_vector(nodes, members, catalog, config, load_case="ULS_Full_Sp
         else:
             live_factor = 0.0
 
-        # Distributed load w_t (N/m) along the transom over clear deck width b_deck = 1.30 m
         w_deck_and_live = (gamma_G * q_deck_N_m2 + gamma_Q_traffic * q_live_N_m2 * live_factor) * s_trib
         member_udl_z[m["id"]] = member_udl_z.get(m["id"], 0.0) + w_deck_and_live
 
-        # Equivalent nodal vertical forces (w * b_deck / 2) & fixed-end moments (+/- w * b_deck^2 / 12)
         V_end = 0.5 * w_deck_and_live * b_deck
         M_fem = (w_deck_and_live * (b_deck ** 2)) / 12.0
         F[6 * m["n1"] + 2] -= V_end
@@ -105,7 +101,6 @@ def assemble_load_vector(nodes, members, catalog, config, load_case="ULS_Full_Sp
             F[6 * n_id + 2] -= 0.5 * qfwk_N
 
     # 4. Horizontal Parapet Load Case (BS EN 1991-2 Cl. 4.8: variable traffic action -> gamma_Q = 1.35)
-    # Applied along the entire top-chord line (nodes 10..12 on Left, 13..15 on Right) by tributary length
     if load_case in {"ULS_Parapet", "ULS_Parapet_Load"}:
         q_parapet_N_m = gamma_Q_traffic * _cfg_float(loads_cfg, "parapet_horizontal_kN_m", default=0.8) * 1e3
         for top_offset in [10, 13]:
@@ -117,7 +112,6 @@ def assemble_load_vector(nodes, members, catalog, config, load_case="ULS_Full_Sp
                 F[6 * n_id + 1] += 0.5 * q_parapet_N_m * (L_left + L_right)
 
     # 5. Transverse Wind Load Case (BS EN 1991-1-4: pressure * Cf * exposed_depth * tributary_length)
-    # Spread along all bottom-chord nodes (0..4 and 5..9)
     if load_case in {"ULS_Wind", "ULS_Transverse_Wind"}:
         wind_kPa = _cfg_float(loads_cfg, "wind_pressure_kPa", default=0.65)
         wind_cf = _cfg_float(loads_cfg, "wind_force_coeff_Cf", default=1.6)

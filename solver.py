@@ -62,7 +62,6 @@ def _local_geometric_stiffness_12x12(N_axial, L):
     """12x12 3D frame geometric stiffness matrix kg_loc (positive N_axial = tension)."""
     kg = np.zeros((12, 12), dtype=float)
     f = N_axial / L
-    # Transverse y-deflection & theta_z coupling
     kg[1, 1] = kg[7, 7] = 1.2 * f
     kg[1, 7] = kg[7, 1] = -1.2 * f
     kg[1, 5] = kg[5, 1] = kg[1, 11] = k_11 = 0.1 * L * f
@@ -70,7 +69,7 @@ def _local_geometric_stiffness_12x12(N_axial, L):
     kg[7, 5] = kg[5, 7] = kg[7, 11] = kg[11, 7] = -0.1 * L * f
     kg[5, 5] = kg[11, 11] = (2.0 / 15.0) * (L**2) * f
     kg[5, 11] = kg[11, 5] = -(1.0 / 30.0) * (L**2) * f
-    # Transverse z-deflection & theta_y coupling
+
     kg[2, 2] = kg[8, 8] = 1.2 * f
     kg[2, 8] = kg[8, 2] = -1.2 * f
     kg[2, 4] = kg[4, 2] = kg[2, 10] = kg[10, 2] = -0.1 * L * f
@@ -133,7 +132,6 @@ def solve_3d_frame(nodes, members, catalog, F, E=210e9, G=80.77e9, support_dofs=
         My_max = float(max(abs(f_loc[4]), abs(f_loc[10])))
         Mz_max = float(max(abs(f_loc[5]), abs(f_loc[11])))
 
-        # Superpose distributed UDL mid-span bending moment & end shear for loaded transoms
         if member_udl_z and m["id"] in member_udl_z:
             w_z = float(member_udl_z[m["id"]])
             L_eff = clear_deck_width_m if m["group"] == "Transom" else L

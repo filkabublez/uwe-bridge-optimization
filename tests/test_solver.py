@@ -51,7 +51,6 @@ def test_transom_udl_reproduces_hand_calc_53MPa():
     sol = solve_3d_frame(nodes, members, catalog, F, member_udl_z=udl_z, clear_deck_width_m=1.3)
     transoms = [mf for mf in sol["member_forces"] if mf["group"] == "Transom"]
     max_sigma_pl = max(t["sigma_plastic_MPa"] for t in transoms)
-    # Exact solver result is ~50.2 MPa (14.1% UR) using unrounded published Wpl = 30.8 cm^3 and gamma_Q = 1.35
     assert 49.0 <= max_sigma_pl <= 56.0
 
 
@@ -67,7 +66,6 @@ def test_mechanism_detection_raises_error():
 
 def test_euler_column_linear_buckling_alpha_cr():
     """5. Verifies solve_linear_buckling() against Euler pinned strut P_cr = pi^2*E*I/L^2."""
-    # Horizontal strut along X-axis: L = 3.0m divided into two 1.5m elements
     nodes = np.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [3.0, 0.0, 0.0]])
     catalog = load_section_catalog()
     sec = catalog["SHS 100x100x4.0"]
@@ -79,19 +77,15 @@ def test_euler_column_linear_buckling_alpha_cr():
     E = 210e9
     P_euler = (np.pi**2 * E * sec["Iy"]) / (L_tot**2)
 
-    # Apply exact Euler axial compression load at Node 2 (-X direction)
     F = np.zeros(18)
     F[6*2 + 0] = -P_euler
 
-    # Pinned at Node 0 (Ux, Uy, Uz, Rx fixed); Roller at Node 2 (Uy, Uz, Rx fixed, free Ux);
-    # Intermediate Node 1 is free to buckle in Z (Uy, Rx fixed to prevent rigid-body roll)
     support_dofs = [
-        0, 1, 2, 3,          # Node 0: pinned support
-        6*1 + 1, 6*1 + 3,    # Node 1: out-of-plane restrained, free Uz deflection
-        6*2 + 1, 6*2 + 2, 6*2 + 3  # Node 2: axial roller in X, free Uz rotation
+        0, 1, 2, 3,
+        6*1 + 1, 6*1 + 3,
+        6*2 + 1, 6*2 + 2, 6*2 + 3
     ]
     buck = solve_linear_buckling(nodes, members, catalog, F, E=E, support_dofs=support_dofs)
-    # alpha_cr should be 1.0 within 2% discretization error for a 2-element beam-column
     assert np.isclose(buck["alpha_cr"], 1.0, rtol=0.03)
 
 
@@ -100,11 +94,9 @@ def test_en1993_1_8_k_joint_beta_regimes():
     catalog = load_section_catalog()
     theta = compute_angle_between_members_deg([1.0, 0.0, 0.0], [0.775, 0.0, -1.0])
     assert 50.0 <= theta <= 55.0
-    # beta = 0.60 -> chord face plastification
     res_face = check_shs_k_joint(catalog["SHS 100x100x4.0"], catalog["SHS 60x60x3.2"], -25e3, theta_deg=theta)
     assert res_face["failure_mode"] == "Chord_Face_Plastification_or_Punching"
     assert res_face["N1_Rd_kN"] > 40.0
-    # beta = 1.00 -> chord side-wall failure
     res_wall = check_shs_k_joint(catalog["SHS 50x50x3.2"], catalog["SHS 50x50x3.2"], -25e3, theta_deg=theta)
     assert res_wall["failure_mode"] == "Chord_Side_Wall_Failure"
     assert res_wall["N1_Rd_kN"] > 60.0

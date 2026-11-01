@@ -1,9 +1,9 @@
 """
 optimise.py
-Discrete Cross-Sectional Sizing Optimizer for BS EN 10210 S355J2H Hollow Sections.
+Discrete Cross-Sectional Sizing Tool for BS EN 10210 S355J2H Hollow Sections.
 Evaluates all five ULS load cases (Full-Span, Half-Span, Concentrated Q_fwk, Parapet,
 and Transverse Wind) plus SLS Deflection, Linear Elastic Buckling (alpha_cr), and
-BS EN 1993-1-8 Chapter 7 welded joint resistance with exact geometric angle theta.
+simplified indicative hollow-section joint checks with exact geometric angle theta.
 """
 from geometry import build_footbridge_geometry
 from loads import assemble_load_vector
@@ -33,7 +33,6 @@ def evaluate_design(section_map, catalog, config, include_mid_vertical=True, inc
         include_plan_bracing=include_plan_bracing
     )
 
-    # Solve all 5 ULS load cases
     uls_solutions = {}
     for lc in ULS_LOAD_CASES:
         F_lc, udl_lc = assemble_load_vector(nodes, members, catalog, config, lc, return_member_udls=True)
@@ -42,21 +41,18 @@ def evaluate_design(section_map, catalog, config, include_mid_vertical=True, inc
             member_udl_z=udl_lc, clear_deck_width_m=b_deck
         )
 
-    # Solve SLS characteristic deflection case
     F_sls, udl_sls = assemble_load_vector(nodes, members, catalog, config, "SLS_Char", return_member_udls=True)
     sol_sls = solve_3d_frame(
         nodes, members, catalog, F_sls, E=mat_cfg["E_Pa"], G=mat_cfg["G_Pa"],
         member_udl_z=udl_sls, clear_deck_width_m=b_deck
     )
 
-    # Compute Linear Elastic Buckling factor alpha_cr under ULS_Full_Span
     F_full, udl_full = assemble_load_vector(nodes, members, catalog, config, "ULS_Full_Span", return_member_udls=True)
     buck_res = solve_linear_buckling(
         nodes, members, catalog, F_full, E=mat_cfg["E_Pa"], G=mat_cfg["G_Pa"],
         member_udl_z=udl_full, clear_deck_width_m=b_deck
     )
 
-    # Evaluate governing EC3 member check across all 5 ULS load cases
     ec3_schedule = []
     for idx, m in enumerate(members):
         sec = catalog[m["section"]]
@@ -70,13 +66,10 @@ def evaluate_design(section_map, catalog, config, include_mid_vertical=True, inc
         gov_chk["governing_case"] = gov_case
         ec3_schedule.append(gov_chk)
 
-    # Compute true geometric brace-to-chord angle theta from 3D node coordinates
-    # Top chord node 10 -> 11 vs Web diagonal node 10 -> 2
     v_chord = nodes[11] - nodes[10]
     v_diag = nodes[2] - nodes[10]
     theta_deg = compute_angle_between_members_deg(v_chord, v_diag)
 
-    # Worst-case axial force in web diagonals across all ULS cases
     diag_indices = [i for i, m in enumerate(members) if m["group"] == "Web_Diagonal"]
     max_diag_N = 0.0
     for lc in ULS_LOAD_CASES:
@@ -120,7 +113,7 @@ def run_discrete_section_optimiser(catalog, config, target_ur=0.85):
     """
     Discrete sizing loop: iterates over structural groups and selects the lightest
     published BS EN 10210 section satisfying all 5 ULS load cases, SLS deflection,
-    global elastic buckling (alpha_cr >= 10), and BS EN 1993-1-8 welded joint checks.
+    global elastic buckling (alpha_cr >= 10), and hollow-section joint checks.
     """
     shs_candidates = sorted([s for s in catalog.values() if s["family"] == "SHS"], key=lambda x: x["mass_per_m"])
     rhs_candidates = sorted([s for s in catalog.values() if s["family"] == "RHS"], key=lambda x: x["mass_per_m"])

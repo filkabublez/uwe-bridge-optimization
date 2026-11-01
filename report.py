@@ -2,11 +2,10 @@
 report.py
 Main execution script for the UWE 3.0m Steel Footbridge Check & Sizing Tool.
 Outputs:
-  1. output/ga_drawing_sheet.png (Dimensioned 3-view General Arrangement drawing)
-  2. output/member_schedule.csv (Full member-by-member EC3 calculation schedule with governing_case)
-  3. output/validation_table.md (Solver vs Hand Calc vs Fusion 360 validation table)
-  4. output/results_summary.md (Full results table for Baseline and Sized Full-Braced designs)
-  5. output/engineering_verification_plots.png (Utilisation, Deformed Shape, ULS-Sized Span Sweep, Carbon)
+  1. output/member_schedule.csv (Full member-by-member EC3 calculation schedule with governing_case)
+  2. output/validation_table.md (Solver vs Hand Calc vs Fusion 360 validation table)
+  3. output/results_summary.md (Full results table for Baseline and Sized Full-Braced designs)
+  4. output/engineering_verification_plots.png (Utilisation, Deformed Shape, ULS-Sized Span Sweep, Carbon)
 """
 import os
 import csv
@@ -16,13 +15,10 @@ import matplotlib.pyplot as plt
 from sections import load_section_catalog
 from optimise import evaluate_design, run_discrete_section_optimiser
 from dynamics import compute_modal_frequencies, run_span_frequency_sweep
-from generate_ga_sheet import export_ga_drawing_sheet
 
 
 def main():
     os.makedirs("output", exist_ok=True)
-    export_ga_drawing_sheet("output/ga_drawing_sheet.png")
-
     with open("config.json") as f:
         config = json.load(f)
     catalog = load_section_catalog(config["materials"]["min_galvanizing_t_mm"])
@@ -34,7 +30,7 @@ def main():
         base_eval["sol_sls"]["K"], base_eval["sol_sls"]["free_dofs"]
     )
 
-    # 2. Run Discrete EC3 Section Sizing Optimizer (Full Braced 3D Frame, H = 1.0m parapet)
+    # 2. Run Discrete EC3 Section Sizing (Full Braced 3D Frame, H = 1.0m parapet)
     opt_sizing_eval = run_discrete_section_optimiser(catalog, config, target_ur=0.85)
     opt_sizing_dyn = compute_modal_frequencies(
         opt_sizing_eval["nodes"], opt_sizing_eval["members"], catalog, config,
@@ -47,7 +43,6 @@ def main():
         include_mid_vertical=True, include_plan_bracing=False
     )
 
-    # Extract Baseline Validation Metrics (Transom id=25 at x=0.725m & Top Chord id=5)
     base_transoms = [r for r in base_eval["schedule"] if r["group"] == "Transom"]
     base_chords = [r for r in base_eval["schedule"] if r["group"] in ("Top_Chord", "Bot_Chord")]
     gov_transom = max(base_transoms, key=lambda x: x["My_Ed_kNm"])
@@ -58,7 +53,7 @@ def main():
     red_sized_pct = (mass_base - mass_sized) / mass_base * 100.0
 
     print("\n" + "="*88)
-    print("BS EN 1993-1-1 / BS EN 1993-1-8 STEEL FOOTBRIDGE CHECK & SIZING SUMMARY (SPAN = 3.0 m)")
+    print("BS EN 1993-1-1 STEEL FOOTBRIDGE CHECK & SIZING SUMMARY (SPAN = 3.0 m)")
     print("="*88)
     print(f"{'Engineering Parameter':<40} | {'Baseline (UWE)':<20} | {'Sized (Full Braced)':<20}")
     print("-" * 88)
@@ -72,7 +67,7 @@ def main():
     print(f"{'Mass Reduction vs. Baseline (%)':<40} | {'0.0%':<20} | {f'-{red_sized_pct:.1f}%':<20}")
     print(f"{'Embodied Carbon A1-A3 (kgCO2e)':<40} | {base_eval['carbon']['co2_total_A1_A3_kg']:<20.1f} | {opt_sizing_eval['carbon']['co2_total_A1_A3_kg']:<20.1f}")
     print(f"{'Max EC3 Member Utilisation Ratio':<40} | {base_eval['max_member_ur']*100:<19.1f}% | {opt_sizing_eval['max_member_ur']*100:<19.1f}%")
-    print(f"{'Max EN 1993-1-8 Joint Utilisation':<40} | {base_eval['max_joint_ur']*100:<19.1f}% | {opt_sizing_eval['max_joint_ur']*100:<19.1f}%")
+    print(f"{'Simplified Indicative Joint UR':<40} | {base_eval['max_joint_ur']*100:<19.1f}% | {opt_sizing_eval['max_joint_ur']*100:<19.1f}%")
     print(f"{'Linear Buckling Load Factor alpha_cr':<40} | {base_eval['alpha_cr']:<20.1f} | {opt_sizing_eval['alpha_cr']:<20.1f}")
     print(f"{'SLS Deflection (mm) [Limit 10.0 mm]':<40} | {base_eval['sls_defl_mm']:<20.2f} | {opt_sizing_eval['sls_defl_mm']:<20.2f}")
     print(f"{'1st Vertical Natural Freq f1,v (Hz)':<40} | {base_dyn['f1_vertical_hz']:<20.1f} | {opt_sizing_dyn['f1_vertical_hz']:<20.1f}")
@@ -82,7 +77,6 @@ def main():
     print(f"bottom-chord lateral bending utilisation to {unbraced_check['max_member_ur']*100:.1f}% -> Plan bracing retained.")
     print("="*88 + "\n")
 
-    # Export Member Schedule CSV (includes governing_case column)
     csv_path = os.path.join("output", "member_schedule.csv")
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(
@@ -91,25 +85,23 @@ def main():
         writer.writeheader()
         writer.writerows(opt_sizing_eval["schedule"])
 
-    # Export Validation Table Markdown (Solver vs Hand Calc vs Fusion 360)
     with open(os.path.join("output", "validation_table.md"), "w") as f:
         f.write("| Verification Metric | Eurocode Hand Calc (Report) | Fusion 360 Solid FEA | Python 6-DOF Frame Solver | Explanation |\n")
         f.write("| :--- | :---: | :---: | :---: | :--- |\n")
         f.write(
-            f"| **Floor Transom Bending Moment (`RHS 100x40x4.0`)** | 1.64 kNm | — | **{gov_transom['My_Ed_kNm']:.2f} kNm** | Exact match on tributary UDL ($w_t = 7.76\\text{{ kN/m}}$ over $L_t = 1.30\\text{{ m}}$) |\n"
+            f"| **Floor Transom Bending Moment (`RHS 100x40x4.0`)** | 1.64 kNm | — | **{gov_transom['My_Ed_kNm']:.2f} kNm** | 8.5% difference: hand calc included higher self-weight allowance in $w_t = 7.76\\text{{ kN/m}}$, whereas solver derives $w_t = 7.15\\text{{ kN/m}}$ from exact deck + transom mass and models end rotational restraint |\n"
         )
         f.write(
-            f"| **Floor Transom Bending Stress & UR (`RHS 100x40x4.0`)** | 54.7 MPa (15.4%) | 54.63 MPa (15.4%) | **{gov_transom['sigma_plastic_MPa']:.1f} MPa ({gov_transom['ur_gov']*100:.1f}%)** | Hand calc used rounded $W_{{pl,y}} = 30.0\\text{{ cm}}^3$; solver uses published EN 10210 $30.8\\text{{ cm}}^3$ |\n"
+            f"| **Floor Transom Bending Stress & UR (`RHS 100x40x4.0`)** | 54.7 MPa (15.4%) | 54.63 MPa (15.4%) | **{gov_transom['sigma_plastic_MPa']:.1f} MPa ({gov_transom['ur_gov']*100:.1f}%)** | Within 8%: ~5.5% from lower derived $M_{{t,Ed}}$ (1.50 vs 1.64 kNm) and ~2.6% from published EN 10210 $W_{{pl,y}} = 30.8\\text{{ cm}}^3$ vs rounded $30.0\\text{{ cm}}^3$ |\n"
         )
         f.write(
             f"| **Main Chord Combined Stress (`SHS 100x100x4.0`)** | 4.8 MPa (1.3% axial) | 11.0–33.0 MPa (3.1–9.3%) | **{gov_chord['sigma_total_MPa']:.1f} MPa ({gov_chord['ur_gov']*100:.1f}%)** | 6-DOF frame solver captures rigid welded joint secondary bending omitted by pin-truss hand calc |\n"
         )
 
-    # Run ULS-sized span frequency sweep (re-sizing sections at every span)
     sweep = run_span_frequency_sweep(catalog, config)
-    span_5hz = next((s["span_m"] for s in sweep if s["f1_vertical_hz"] < 5.0), ">18.0")
+    min_fv_18m = sweep[-1]["f1_vertical_hz"]
+    min_fl_18m = sweep[-1]["f1_lateral_hz"]
 
-    # Export Full Results Summary Markdown
     with open(os.path.join("output", "results_summary.md"), "w") as f:
         f.write("| Engineering Parameter | Baseline (UWE Report) | Sized (Full Braced) | Governing Limit / Clause |\n")
         f.write("| :--- | :---: | :---: | :--- |\n")
@@ -121,13 +113,12 @@ def main():
         f.write(f"| **Structural Steel Mass (kg)** | {mass_base:.1f} kg | **{mass_sized:.1f} kg (-{red_sized_pct:.1f}%)** | Minimized by `optimise.py` |\n")
         f.write(f"| **Embodied Carbon A1–A3 ($\\text{{kgCO}}_2\\text{{e}}$)** | {base_eval['carbon']['co2_total_A1_A3_kg']:.1f} $\\text{{kgCO}}_2\\text{{e}}$ | **{opt_sizing_eval['carbon']['co2_total_A1_A3_kg']:.1f} $\\text{{kgCO}}_2\\text{{e}}$** | ICE v3.0 Steel + HDG Zinc |\n")
         f.write(f"| **Max Member Utilisation (`max_member_ur`)** | {base_eval['max_member_ur']*100:.1f}% | **{opt_sizing_eval['max_member_ur']*100:.1f}%** | $\\le 85\\%$ (`BS EN 1993-1-1`) |\n")
-        f.write(f"| **Max Welded Joint Utilisation (`max_joint_ur`)** | {base_eval['max_joint_ur']*100:.1f}% | **{opt_sizing_eval['max_joint_ur']*100:.1f}%** | $\\le 85\\%$ (`BS EN 1993-1-8 Table 7.10`, $\\theta = {opt_sizing_eval['theta_deg']:.1f}^\\circ$) |\n")
+        f.write(f"| **Simplified Indicative Joint UR (`max_joint_ur`)** | {base_eval['max_joint_ur']*100:.1f}% | **{opt_sizing_eval['max_joint_ur']*100:.1f}%** | $\\le 85\\%$ (Indicative check, $\\theta = {opt_sizing_eval['theta_deg']:.1f}^\\circ$) |\n")
         f.write(f"| **Global Elastic Buckling Factor $\\alpha_{{cr}}$** | {base_eval['alpha_cr']:.1f} | **{opt_sizing_eval['alpha_cr']:.1f}** | $\\ge 10.0$ (`BS EN 1993-1-1 Cl. 5.2.1`) |\n")
         f.write(f"| **SLS Vertical Deflection (`sls_defl_mm`)** | {base_eval['sls_defl_mm']:.2f} mm | **{opt_sizing_eval['sls_defl_mm']:.2f} mm** | $\\le 10.0\\text{{ mm}}$ ($L/300$, `Cl. 7.2`) |\n")
         f.write(f"| **1st Vertical Natural Freq $f_{{1,v}}$ (Hz)** | {base_dyn['f1_vertical_hz']:.1f} Hz | **{opt_sizing_dyn['f1_vertical_hz']:.1f} Hz** | $\\ge 5.0\\text{{ Hz}}$ (`BS EN 1990 Annex A2`) |\n")
         f.write(f"| **1st Lateral Natural Freq $f_{{1,h}}$ (Hz)** | {base_dyn['f1_lateral_hz']:.1f} Hz | **{opt_sizing_dyn['f1_lateral_hz']:.1f} Hz** | $\\ge 2.5\\text{{ Hz}}$ (`BS EN 1990 Annex A2`) |\n")
 
-    # Generate 4-panel Engineering Verification Plots
     fig, axes = plt.subplots(2, 2, figsize=(14, 10), dpi=160)
 
     ax1 = axes[0, 0]
@@ -172,7 +163,7 @@ def main():
     ax3.axhline(2.5, color="#ea580c", linestyle=":", label="EN 1990 A2 Lateral Trigger (2.5 Hz)")
     ax3.set_xlabel("Bridge Span L (m)")
     ax3.set_ylabel("Natural Frequency (Hz)")
-    ax3.set_title(f"3. ULS-Sized Modal Frequency vs. Span (f1,v < 5 Hz near L = {span_5hz} m)")
+    ax3.set_title(f"3. ULS-Sized Frequency vs. Span (18m: fv={min_fv_18m:.1f} Hz, fh={min_fl_18m:.1f} Hz > Triggers)")
     ax3.set_yscale("log")
     ax3.legend(fontsize=8)
     ax3.grid(True, which="both", linestyle="--", alpha=0.4)

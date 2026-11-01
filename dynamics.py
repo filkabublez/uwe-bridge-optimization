@@ -70,7 +70,7 @@ def compute_modal_frequencies(nodes, members, catalog, config, K, free_dofs):
 
 def run_span_frequency_sweep(catalog, config, spans_m=None):
     """
-    Sweeps span L from 3m to 18m, running the discrete ULS/SLS section optimiser at
+    Sweeps span L from 3m to 18m, running the discrete ULS/SLS section sizing loop at
     each span first so that every reported natural frequency belongs to a ULS-passing bridge.
     """
     if spans_m is None:

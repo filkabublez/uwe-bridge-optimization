@@ -24,11 +24,9 @@ def build_footbridge_geometry(span_m=3.0, width_cc_m=1.4, height_m=1.0,
     x_top = [x_sh, x_mid, x_rt]
 
     nodes = []
-    # 0..4: Left Bottom (y=0); 5..9: Right Bottom (y=width_cc_m)
     for y in [0.0, width_cc_m]:
         for xb in x_bot:
             nodes.append([xb, y, 0.0])
-    # 10..12: Left Top (y=0, z=height_m); 13..15: Right Top (y=width_cc_m, z=height_m)
     for y in [0.0, width_cc_m]:
         for xt in x_top:
             nodes.append([xt, y, height_m])
@@ -53,7 +51,6 @@ def build_footbridge_geometry(span_m=3.0, width_cc_m=1.4, height_m=1.0,
         members.append({"n1": t_off+0, "n2": b_off+2, "group": "Web_Diagonal", "section": section_map["Web_Diagonal"]})
         members.append({"n1": t_off+2, "n2": b_off+2, "group": "Web_Diagonal", "section": section_map["Web_Diagonal"]})
 
-    # Transverse Floor Transoms (at x=0, x_sh, x_mid, x_rt, span_m)
     for nL, nR in [(0, 5), (1, 6), (2, 7), (3, 8), (4, 9)]:
         members.append({"n1": nL, "n2": nR, "group": "Transom", "section": section_map["Transom"]})
 
